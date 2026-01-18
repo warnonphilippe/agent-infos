@@ -1,0 +1,20 @@
+Java
+IA
+LLM
+Python
+Langchain
+Langraph
+Agentic-AI
+Machine Learning
+Deep Learning
+NLP
+Natural Language Processing
+Artificial Intelligence
+Neural Networks
+Transformers
+OpenAI
+Azure
+FastAPI
+API
+Microservices
+Cloud Computing

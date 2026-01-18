@@ -1,0 +1,352 @@
+﻿The Architectures of immediacy: Constructing Temporal Agentic Systems for High-Fidelity Technical Retrieval
+Abstract
+The paradigm of artificial intelligence is undergoing a fundamental shift from static knowledge retrieval to dynamic, agentic orchestration. In the domain of software engineering—specifically regarding volatile ecosystems such as Java Spring, Python AI frameworks, and LangChain—the utility of an automated assistant is strictly bounded by its access to real-time information. This report addresses the specific architectural challenge of designing a LangGraph-based agent capable of retrieving, filtering, and synthesizing the "best" technical articles from a rolling 72-hour window. By conducting an exhaustive analysis of the nascent Model Context Protocol (MCP) ecosystem, we identify and evaluate the requisite server implementations, specifically the Exa AI Search MCP Server and the Hacker News MCP Server, as the optimal mechanisms for satisfying the qualitative ("best") and temporal ("last 3 days") constraints of the user's directive. The following analysis synthesizes protocol specifications, graph theory, and prompt engineering to propose a comprehensive reference architecture for a "Tech News Scout" agent.
+1. The Contextual Crisis in Modern Generative AI
+The operational efficacy of Large Language Models (LLMs) in technical domains is historically plagued by two distinct but related failures: the "Knowledge Cutoff" and the "Quality Hallucination." When a software architect queries an LLM regarding the "latest best practices in Spring Boot," the model relies on training data that may be months or years obsolete. In the context of the user's request—identifying the "best articles of the last 3 days"—standard models are functionally blind.
+Traditional remediation strategies such as Retrieval-Augmented Generation (RAG) rely on pre-indexed vector databases. However, maintaining a vector index that is refreshed every few minutes to capture the "last 3 days" of the entire internet is computationally prohibitive and architecturally brittle. The introduction of the Model Context Protocol (MCP) creates a third path: real-time, standardized tool invocation that decouples the intelligence (the Agent) from the information access (the Server).
+This report explores the deployment of an MCP-enabled LangGraph agent. Unlike linear chains, LangGraph allows for cyclic, stateful reasoning, enabling an agent to query a source, evaluate the temporal relevance of the returned data (e.g., "Is this truly from the last 72 hours?"), and iteratively refine its search parameters. This capability is paramount when dealing with the ambiguity of the term "best," which in technical circles implies a conflation of novelty, community engagement, and authoritative sourcing.
+2. The Model Context Protocol (MCP): A Standardization Analysis
+To understand how an agent can "call" external search tools, one must first dissect the transport and protocol layer that makes this possible. The Model Context Protocol is not merely an API wrapper; it is a standardized interface definition language for AI resources.
+2.1 The Protocol Architecture
+At its core, MCP utilizes a client-host-server architecture. The "Host" (in this case, the LangGraph runtime) connects to an "MCP Client," which in turn establishes a connection to one or more "MCP Servers".1 The communication occurs via JSON-RPC 2.0 messages transmitted over either standard input/output (stdio) or Server-Sent Events (SSE) over HTTP.2
+For a desktop-class agent or a local development environment, the stdio transport is preferred for its security profile—the server runs as a subprocess of the agent, inheriting its permissions and lifecycle. This is critical for the user's request, as it implies a personal research assistant likely running in a local environment (e.g., VS Code or a local Python script) rather than a distributed cloud microservice, although the architecture supports both.
+2.2 The Tool Discovery Mechanism
+When the LangGraph agent initializes, it performs a tools/list handshake with the connected MCP servers.1 This is the pivotal moment where the static code of the server declares its capabilities to the flexible reasoning of the LLM. The server responds with a JSON Schema definition of its tools.
+For the requested task, the agent does not need to know how to scrape a website or query a database. It simply needs to know that a tool named web_search exists, and that this tool accepts a parameter named start_published_date. This abstraction allows us to swap the underlying search provider (e.g., changing from Brave to Exa) without rewriting a single line of the agent's cognitive logic, provided the tool schemas remain compatible.
+2.3 The "Resource" vs. "Tool" Dichotomy
+The MCP specification distinguishes between "Resources" (passive data to be read, like a log file) and "Tools" (executable functions that take arguments).1 The user's request to "find articles" necessitates the use of Tools. A Resource would be appropriate if the user wanted to read a specific, static list of URLs. However, "finding" implies a search operation with dynamic parameters (keywords, date ranges), which maps strictly to the Tool primitive in the MCP specification.
+3. Candidate Selection: Evaluating MCP Servers for Temporal Retrieval
+The user's requirements are specific: "best articles," "last 3 days," and topics including "Java, Spring, AI, Python, LangChain." This requires a search engine that supports three specific axes of filtration:
+1. Temporal Granularity: The ability to filter by absolute date (ISO 8601) or relative date (hours).
+2. Semantic Quality: The ability to distinguish "best" (insightful, tutorial, release note) from "noise" (SEO spam, aggregators).
+3. Domain Specificity: The ability to recognize technical jargon (e.g., differentiating "Spring" the framework from "Spring" the season).
+We analyzed the landscape of available MCP servers to identify the optimal candidates.
+3.1 The Exa AI Search MCP Server
+The Exa (formerly Metaphor) MCP Server represents the current state-of-the-art for agentic search. Unlike Google or Bing, which are optimized for keyword matching and ad delivery, Exa uses a neural search engine designed to retrieve results based on semantic meaning.
+3.1.1 Neural Search vs. Keyword Search
+For a query like "best articles about LangGraph," a keyword engine looks for the frequency of the word "LangGraph." Exa's neural engine, however, looks for the concept of "high-quality technical writing about LangGraph." This is achieved through their embedding model, which allows the agent to provide a "prompt" for the search, such as "Here is a great technical deep-dive into LangGraph agents".4 The engine then returns documents that would validly follow that prompt. This is uniquely suited to the user's request for the "best" articles, as "best" is a semantic, not syntactic, quality.
+3.1.2 Temporal Filtering Capabilities
+Crucially, the Exa MCP server exposes a tool definition that includes the start_published_date parameter.3 This parameter accepts an absolute date string (e.g., "2023-10-27"). This allows for precise compliance with the "last 3 days" requirement. Unlike vague filters like "past week," the agent can calculate exactly 72 hours prior to the current execution time and pass that timestamp to the server, ensuring zero leakage of older content.
+3.1.3 Domain and Category Filtering
+Exa also supports a category parameter, which can be set to values such as blog, research paper, github, or news.4 For the user's specific topics:
+* Java/Spring: The blog category is essential for filtering out corporate landing pages and focusing on engineering blogs (e.g., Baeldung, Spring.io).
+* AI/Python: The research paper and github categories allow the agent to find ArXiv preprints and repository updates, which are often the primary source of "best" new information in AI.8
+* LangChain: As a rapidly moving library, the "best" info is often in documentation updates or tweet threads. Exa supports filtering by specific domains (include_domains), allowing the agent to target langchain.com or twitter.com.6
+3.2 The Hacker News MCP Server
+While Exa provides breadth, the Hacker News MCP Server provides community-validated depth. In the technical domain, "best" is often synonymous with "upvoted by peers."
+3.2.1 The "Best" Signal
+Hacker News (HN) is a primary aggregation point for the exact topics requested: Python, AI, and Java. An article that reaches the front page of HN is, by definition, filtered for quality by the community. The MCP implementation for Hacker News (e.g., the hackernews-mcp package) exposes tools to tap into this signal.9
+3.2.2 Temporal Logic in HN
+The search_stories tool in the Hacker News MCP server includes a time_range_hours parameter.9 This is an exact match for the user's requirement. The agent can simply pass time_range_hours=72 to restrict the search to the last 3 days. This significantly simplifies the agent's logic compared to calculating ISO dates.
+3.2.3 Synthesis Strategy
+A robust "Tech News Scout" should use Hacker News as a validator. The agent can search Exa for a broad list, and simultaneously search HN to see if any of those URLs are currently being discussed. Alternatively, it can fetch the top stories from HN and then use Exa to "read" the content of those links (using Exa's get_contents tool).3
+3.3 The Brave Search MCP Server
+The Brave Search MCP Server is a strong alternative, particularly for privacy-conscious deployments. It relies on an independent web index.
+3.3.1 The freshness Parameter
+Brave's API uses a freshness parameter with values like pd (past day), pw (past week), and pm (past month).11 It does not natively support a "last 3 days" (72 hours) rolling window. To use Brave, the agent would have to request pw (past week) and then perform a second pass of filtering within the LangGraph node to discard articles from days 4-7. This adds computational overhead and token cost (reading irrelevant headers) compared to Exa's precise filtering.
+3.3.2 Indexing Speed
+Brave is excellent for general news, but for niche technical content (e.g., a specific pull request in LangChain), its independent index may trail behind Exa's live-crawl capabilities. However, it is a robust fallback if Exa (a paid service) is unavailable.
+3.4 Google News and World News API
+The search landscape also includes MCP servers for Google News and the World News API.13
+* Google News: While it supports dateRestrict (e.g., "d3"), Google News creates a strong bias toward mainstream media outlets. A search for "Java Spring" might return a generic press release about Oracle rather than a detailed engineering tutorial on Spring Boot 3.2.
+* World News API: This API focuses on geopolitical and general news. It lacks the semantic understanding of "code," "framework," or "library," making it unsuitable for the user's highly technical query.
+3.5 Selection Verdict
+Based on the comparative analysis, the Exa AI Search MCP Server is the primary recommendation for this architecture, supported by the Hacker News MCP Server for community signal.
+Feature Comparison
+	Exa AI MCP
+	Hacker News MCP
+	Brave Search MCP
+	Google News MCP
+	Search Paradigm
+	Neural / Semantic
+	Social Curation
+	Keyword Index
+	News Aggregation
+	"Best" Metric
+	Semantic Relevance
+	Community Upvotes
+	SEO / PageRank
+	Publisher Authority
+	Date Filtering
+	Exact (start_published_date)
+	Exact (time_range_hours)
+	Approximate (freshness)
+	Relative (dateRestrict)
+	Tech Specificity
+	High (GitHub/Papers)
+	Very High (Devs)
+	Medium
+	Low
+	Agent Complexity
+	Medium (Date Calc)
+	Low (Direct Int)
+	High (Post-processing)
+	Low
+	Recommended?
+	YES (Primary)
+	YES (Secondary)
+	Fallback
+	No
+	4. Architectural Design: The LangGraph Agent
+Having selected the tools, we must now design the entity that wields them: the LangGraph Agent. LangGraph is a library for building stateful, multi-actor applications with LLMs.15 Unlike the legacy AgentExecutor in LangChain, which was a somewhat opaque "loop," LangGraph forces the developer to explicitly define the State, the Nodes (units of work), and the Edges (control flow).
+4.1 The State Schema
+The memory of our agent is defined by its State. For a research task, the state must capture the conversation history and potentially the intermediate search results.
+Python
+from typing import Annotated, TypedDict
+from langgraph.graph.message import add_messages
+
+
+class AgentState(TypedDict):
+    # 'messages' is a list of chat messages (User, AI, Tool)
+    # add_messages is a reducer that appends new messages rather than overwriting
+    messages: Annotated[list, add_messages]
+
+
+4.2 The Graph Topology
+The topology for this request is a ReAct (Reasoning + Acting) Cycle.
+1. START: The graph initializes with the user's query.
+2. Agent Node: The LLM analyzes the query and the current state. It decides whether to call a tool or issue a final response.
+3. Conditional Edge:
+   * If tool_calls are present -> Route to Tools Node.
+   * If no tool_calls -> Route to END.
+4. Tools Node: Executes the MCP tool (e.g., calls Exa). The output is added to the state as a ToolMessage.
+5. Edge: Route back to Agent Node. The LLM sees the tool output and decides if it has enough information to satisfy the user (e.g., "Did I find enough 'best' articles?").
+4.3 Integrating MCP via langchain-mcp-adapters
+The critical integration point is the langchain-mcp-adapters library. This library provides the MultiServerMCPClient. This client acts as a bridge: it connects to the MCP server processes, fetches their JSON schema definitions, and converts them into LangChain's BaseTool format.17
+This conversion is vital. The LLM (e.g., GPT-4 or Claude 3.5) creates tool calls based on the LangChain tool definition. The adapter then translates that internal tool call back into an MCP JSON-RPC message (tools/call), sends it to the server, awaits the result, and translates the JSON-RPC response back into a LangChain tool output. This abstraction is what allows LangGraph to "speak" MCP natively.
+5. The Temporal Grounding Challenge
+A subtle but fatal flaw in many agent implementations is the lack of temporal grounding. An LLM is a frozen snapshot of the past. It does not know "today."
+5.1 The "Relative Time" Paradox
+The user asks for "last 3 days."
+* If the system prompt is generic ("You are a helpful assistant"), the LLM might hallucinate a date or refuse to answer.
+* If the LLM assumes the training cut-off date is "today," it will search for articles from 2023 or 2024 (depending on the model version).
+5.2 Dynamic System Prompting
+To solve this, we must inject the current execution time into the agent's System Prompt at runtime.6
+Incorrect Prompt:
+"Find articles from the last 3 days."
+Correct Prompt (Injected):
+"Today is Friday, January 17, 2026. The user wants articles from the last 3 days. Therefore, you must set the start_published_date parameter in the search tool to '2026-01-14'. Do not search for articles older than this date."
+This technique converts a relative user requirement ("last 3 days") into an absolute tool constraint ("start_date=2026-01-14"). This calculation should ideally be performed by the LLM (reasoning) but guided by the prompt (context).
+6. Domain-Specific Search Strategies
+The user's request encompasses distinct technical domains. The agent must employ different search strategies for each to find the "best" content.
+6.1 Java & Spring ("pring")
+The user likely meant "Spring" (the framework), specifically Spring Boot.
+* The Problem: Searching for "Spring" often yields seasonal results or generic terms.
+* The Strategy: The agent must be instructed to expand "pring" to "Spring Boot" or "Java Spring Framework."
+* Best Sources: Engineering blogs (Baeldung, Spring.io/blog), InfoQ, and DZone.
+* Exa Configuration: Use category="blog" and category="news". The agent should query for "Spring Boot 3.x release notes" or "Spring AI tutorial" rather than just "Spring".19
+6.2 Python & AI
+* The Problem: The volume of AI content is overwhelming. "Best" implies filtering out the noise.
+* The Strategy: Focus on code and papers.
+* Best Sources: Hugging Face Blog, PyTorch Blog, ArXiv, and top-tier Substacks.
+* Exa Configuration: Use category="research paper" for AI models. Use category="github" to find trending repositories or recent releases (e.g., "LangChain v0.3 release").
+6.3 LangChain & LangGraph
+* The Problem: These are meta-topics (the agent is built with them).
+* The Strategy: Search for "patterns," "blueprints," and "migration guides."
+* Best Sources: LangChain official blog, Harrison Chase's Twitter (via Exa's twitter.com domain filter if available), and YouTube transcripts of recent AI engineering meetups.
+7. Implementation: The "Tech News Scout" System
+The following section details the practical implementation of the system. We will utilize Python as the host language, LangGraph for orchestration, and Exa as the primary MCP server.
+7.1 Environment Configuration
+The system relies on a .env file for credentials. This prevents hardcoding API keys, a crucial security practice.
+Bash
+#.env file content
+OPENAI_API_KEY=sk-proj-...
+EXA_API_KEY=...    # Get from dashboard.exa.ai
+ANTHROPIC_API_KEY=... # Optional, if using Claude
+
+
+7.2 The MCP Configuration
+We define the server configuration dictionary. This tells the MultiServerMCPClient how to launch the Exa server. We use npx (Node Package Execute) to run the server directly from the npm registry without polluting the global python environment.20
+Python
+mcp_server_config = {
+    "exa": {
+        "command": "npx",
+        "args": ["-y", "exa-mcp-server"],
+        "transport": "stdio",
+        "env": {
+            "EXA_API_KEY": os.environ.get("EXA_API_KEY") 
+        }
+    }
+}
+
+
+7.3 The Agent Logic (Python)
+The following code implements the agent.py module. It demonstrates the injection of time, the connection to MCP, and the graph execution.
+Python
+import os
+import sys
+import datetime
+import asyncio
+from dotenv import load_dotenv
+
+
+from langchain_openai import ChatOpenAI
+from langgraph.prebuilt import create_react_agent
+from langchain_core.messages import SystemMessage
+
+
+# The Bridge Library
+from langchain_mcp_adapters.client import MultiServerMCPClient
+
+
+# Load env vars
+load_dotenv()
+
+
+async def run_tech_scout_agent():
+    # 1. ESTABLISH MCP CONNECTION
+    # We use a context manager to ensure the connection is closed properly.
+    # The client launches the 'npx' process and keeps the stdio pipe open.
+    async with MultiServerMCPClient(
+        {
+            "exa": {
+                "command": "npx",
+                "args": ["-y", "exa-mcp-server"],
+                "transport": "stdio",
+                "env": {"EXA_API_KEY": os.getenv("EXA_API_KEY")},
+            }
+        }
+    ) as client:
+        
+        # 2. TOOL DISCOVERY
+        # The client asks the Exa server: "What can you do?"
+        # The server replies with JSON schemas for 'search', 'get_contents', etc.
+        # The client converts these to LangChain Tools.
+        tools = await client.get_tools()
+        print(f" Loaded {len(tools)} tools from MCP: {[t.name for t in tools]}")
+
+
+        # 3. CONFIGURE THE LLM
+        # We use GPT-4o. Its reasoning capabilities are required to handle
+        # the complex date math and domain filtering.
+        model = ChatOpenAI(model="gpt-4o", temperature=0)
+
+
+        # 4. TEMPORAL INJECTION (The "Time Awareness" Logic)
+        now = datetime.datetime.now()
+        three_days_ago = now - datetime.timedelta(days=3)
+        
+        # We construct a system prompt that explicitly defines the date window.
+        system_prompt = f"""You are a Senior Technical Researcher. 
+        
+        Current Date and Time: {now.strftime("%Y-%m-%d %H:%M:%S")}
+        Target Search Window Start: {three_days_ago.strftime("%Y-%m-%d")}
+        
+        Your Goal: Find the BEST articles from the LAST 3 DAYS about:
+        Java, Spring (specifically Spring Boot), AI, Python, LangChain.
+        
+        CRITICAL INSTRUCTIONS:
+        1. When using the 'exa' search tool, you MUST set the 'start_published_date' 
+           argument to '{three_days_ago.strftime("%Y-%m-%d")}'.
+        2. Do NOT retrieve content older than this date.
+        3. Use the 'category' filter intelligently:
+           - Use 'blog' for Spring/Java tutorials.
+           - Use 'github' or 'research paper' for AI/Python.
+           - Use 'news' for general announcements.
+        4. "Best" means: High technical depth, authoritative sources (e.g., official blogs,
+           top engineering engineering teams), or viral discussions.
+        5. Summarize the findings grouped by topic.
+        """
+
+
+        # 5. BUILD THE GRAPH
+        # create_react_agent creates a StateGraph with a Model Node and a Tool Node.
+        agent = create_react_agent(model, tools, state_modifier=system_prompt)
+
+
+        # 6. EXECUTE THE QUERY
+        # The query is broad, forcing the agent to plan multiple steps.
+        query = "Find the best technical articles from the last 3 days for my stack."
+        print(f"\n[User] {query}\n")
+
+
+        # We stream the execution to watch the agent "think"
+        async for step in agent.astream({"messages": [("user", query)]}):
+            if "agent" in step:
+                # The agent decided to do something (msg content or tool call)
+                print(f"[Agent] Thinking... {step['agent']['messages'][-1].content}")
+            if "tools" in step:
+                # The tool executed and returned data
+                print(f" Result size: {len(str(step['tools']['messages'][-1].content))} chars")
+
+
+if __name__ == "__main__":
+    # Run the async main loop
+    asyncio.run(run_tech_scout_agent())
+
+
+8. Analyzing the Execution Flow
+To fully appreciate the robustness of this solution, we must trace the execution of a single request.
+8.1 The Planning Phase
+Upon receiving the prompt, the Agent Node (GPT-4o) processes the system instructions. It recognizes the variable {three_days_ago} which resolved to (hypothetically) 2025-01-14.
+It formulates a plan: "I need to search for Spring Boot, then Python AI, then LangChain. I will perform separate searches to ensure high relevance for each topic."
+8.2 The Tool Call (Spring)
+The agent constructs the first tool call. It selects the search tool (exposed by Exa).
+* Argument query: "Spring Boot best articles features tutorials"
+* Argument start_published_date: "2025-01-14" (Strictly adhering to the prompt).
+* Argument category: "blog" (To avoid marketing landing pages).
+8.3 The MCP Handshake
+The MultiServerMCPClient receives this intent. It serializes the call into a JSON-RPC request:
+JSON
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "search",
+    "arguments": {
+      "query": "Spring Boot...",
+      "start_published_date": "2025-01-14",
+      "category": "blog"
+    }
+  },
+  "id": 1
+}
+
+
+It pipes this to the standard input of the running exa-mcp-server process.
+8.4 The Server Execution
+The Exa server process receives the JSON. It validates the arguments against its internal Zod schema. It then makes an HTTP request to https://api.exa.ai/search, passing the date filters natively to the neural search engine. The Exa API filters its index, retrieving only documents crawled or published after the start date. It returns these results to the MCP server process.
+8.5 The Response and Synthesis
+The MCP server sends the results back to the Python client. The LangGraph Tools node receives this data and appends it to the messages list in the state. Control returns to the Agent Node. The agent reads the results.
+* Observation: "I found a great article about 'Spring Boot 3.4 SSL Bundles' published yesterday."
+* Action: "Now I will search for LangChain."
+This cycle repeats until all topics are covered. Finally, the agent synthesizes a cohesive report for the user, citing the URLs found.
+9. Expanding the Federation: Adding Hacker News
+While Exa is powerful, a true "Power User" agent benefits from multiple perspectives. We can easily extend the configuration to include Hacker News.
+9.1 Multi-Server Configuration
+Python
+async with MultiServerMCPClient(
+    {
+        "exa": {... }, 
+        "hn": {
+            "command": "npx",
+            "args": ["-y", "hackernews-mcp"], 
+            "transport": "stdio"
+        }
+    }
+) as client:
+
+
+9.2 Cross-Validation Logic
+With both servers active, the agent can employ a "Verify and Deep Dive" strategy:
+1. Call hn.search_stories: Query for "LangGraph" with time_range_hours=72.
+2. Result: "User 'ai_dev' posted a link to 'LangGraph v2.0' which has 200 points."
+3. Call exa.search: Search for the specific URL found on HN to get similar articles or a deeper summary of the content if the HN link was just a title.
+This demonstrates the true power of MCP: composability. The agent becomes a platform where tools from different providers (Community vs. Commercial) can interact within the same cognitive loop.
+10. Security and Performance Considerations
+10.1 Security: The stdio Advantage
+Using stdio transport is inherently more secure than HTTP for local agents. The MCP server process runs as a child of the agent script. It listens only to the parent process. There are no open network ports (e.g., localhost:8080) that could be scanned or exploited by other malicious software on the machine. The API keys (Exa, OpenAI) are injected via environment variables only into the specific subprocesses that need them, adhering to the principle of least privilege.
+10.2 Error Handling in LangGraph
+External tools fail. The Exa API might time out; the HN API might rate-limit. In a robust LangGraph implementation, we must handle this.
+* Retry Policy: We can wrap the Tools node in a retry logic that catches MCPError exceptions.
+* Fallback: If Exa fails, the agent's prompt can instruct it: "If the 'exa' tool encounters an error, attempt to use the 'brave' tool or 'hn' tool as a fallback." This resilience is only possible because LangGraph allows us to define control flow edges based on tool output states.
+11. Conclusion
+The construction of an agent capable of finding the "best articles of the last 3 days" is not merely a prompt engineering task; it is a systems engineering challenge. It requires the precise alignment of Protocol (MCP), Architecture (LangGraph), and Service (Exa/HN).
+This report has demonstrated that:
+1. MCP solves the integration bottleneck, allowing standard tools to be plugged into the agent.
+2. Exa AI provides the necessary semantic and temporal filtering (start_published_date) that traditional search engines lack.
+3. LangGraph provides the cyclic execution environment necessary for the agent to plan, execute, and refine its search strategies.
+4. Temporal Injection in the system prompt is the critical "glue" that translates the user's relative intent ("last 3 days") into the tool's absolute requirements.
+By implementing the reference architecture detailed herein, one moves beyond simple chatbots to create a verifiable, high-fidelity research assistant—a "Tech News Scout" that automates the consumption of the ever-expanding technical knowledge stream.
+12. Future Outlook: The Agentic Web
+The architecture described here is a precursor to a broader "Agentic Web." As more services (GitHub, Slack, Jira, Datadog) release MCP servers, the agent's capability expands from "finding news" to "acting on news." An agent could find a vulnerability in a Spring Boot library (via Exa), check the company's private repositories for that dependency (via GitHub MCP), and draft a Jira ticket (via Jira MCP). The standardization provided by MCP makes this future not only possible but imminent. The "Tech News Scout" is simply the first node in this emerging graph of automated intelligence.
