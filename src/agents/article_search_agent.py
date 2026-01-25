@@ -7,9 +7,7 @@ from src.agents.nodes import (
     load_tags_node,
     build_queries_node,
     fetch_articles_node,
-    filter_articles_node,
-    rank_articles_node,
-    select_top_10_node,
+    # filter_articles_node, # Removed per user request (Exa doesn't return tags)
     generate_summary_node,
     format_response_node,
 )
@@ -31,19 +29,13 @@ class ArticlesOrchestrator:
         workflow.add_node("load_tags", load_tags_node)
         workflow.add_node("build_queries", build_queries_node)
         workflow.add_node("fetch_articles", fetch_articles_node)
-        workflow.add_node("filter_articles", filter_articles_node)
-        workflow.add_node("rank_articles", rank_articles_node)
-        workflow.add_node("select_top_10", select_top_10_node)
         workflow.add_node("generate_summary", generate_summary_node)
         workflow.add_node("format_response", format_response_node)
 
         workflow.set_entry_point("load_tags")
         workflow.add_edge("load_tags", "build_queries")
-        workflow.add_edge("build_queries", "fetch_articles")
-        workflow.add_edge("fetch_articles", "filter_articles")
-        workflow.add_edge("filter_articles", "rank_articles")
-        workflow.add_edge("rank_articles", "select_top_10")
-        workflow.add_edge("select_top_10", "generate_summary")
+        workflow.add_edge("build_queries", "fetch_articles")        
+        workflow.add_edge("fetch_articles", "generate_summary")
         workflow.add_edge("generate_summary", "format_response")
         workflow.add_edge("format_response", END)
 
@@ -56,9 +48,6 @@ class ArticlesOrchestrator:
             "tags": [],
             "queries": [],
             "articles": [],
-            "filtered_articles": [],
-            "ranked_articles": [],
-            "top_articles": [],
             "summary": "",
             "result": {},
         }

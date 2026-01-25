@@ -8,8 +8,5 @@ class AgentState(TypedDict):
     tags: List[str]
     queries: List[str]
     articles: List[Dict]
-    filtered_articles: List[Article]
-    ranked_articles: List[Article]
-    top_articles: List[Article]
     summary: str
     result: Dict

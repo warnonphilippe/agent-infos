@@ -1,0 +1,21 @@
+Recherche d'articles via l'API de Exa MCP
+search_exa_mcp permet d'accéder aux articles via l'API de Exa MCP, mais sans interaction avec un LLM.
+l'étape suivant pourrait être d'ajouter un envoie d email par serveur MCP
+
+TODO Autre cas plus avancé
+- Vérifier l'intention de l'utilisateur
+- Définir une liste de MCP serveur, par exemple :
+  - Exa MCP
+  - Google News
+  - MCP de météo ?
+- Passer les serveurs au LLM
+- Envoyer la demande de l'utilisateur au LLM
+- Recevoir la réponse du LLM
+  - S'il s'agit d'une demande de news, d'infos, il devra choisir le serveur MCP
+- Appeler le MCP serveur avec les paramètres du LLM
+- Recevoir la réponse du MCP serveur
+
+En bonus, on pourrait custom ajouter une définition de tool et les passer au LLM
+
+
+
