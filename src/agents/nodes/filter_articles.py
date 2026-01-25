@@ -1,6 +1,6 @@
 """Node to filter articles by tags."""
 import logging
-from src.agents.article_processor import filter_articles_by_tags
+from src.agents.nodes.article_processor import filter_articles_by_tags
 from src.agents.types import AgentState
 
 logger = logging.getLogger(__name__)

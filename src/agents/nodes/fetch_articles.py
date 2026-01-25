@@ -1,7 +1,7 @@
 """Node to fetch articles from MCP servers."""
 import logging
 from datetime import datetime, timedelta
-from src.agents.search_exa_mcp import search_exa_mcp
+from src.agents.nodes.search_exa_mcp import search_exa_mcp
 from src.agents.types import AgentState
 from src.config.settings import settings
 
