@@ -95,7 +95,7 @@ curl http://localhost:8000/api/health
 
 2. **Générer un résumé et obtenir les top articles:**
 ```bash
-curl -X POST http://localhost:8000/api/generate
+curl -X GET http://localhost:8000/api/articles
 ```
 
 La réponse sera au format JSON:

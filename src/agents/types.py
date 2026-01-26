@@ -1,6 +1,6 @@
 """Shared types for LangGraph workflows."""
 from typing import Dict, List, TypedDict
-from src.agents.article_processor import Article
+from src.agents.nodes.article_processor import Article
 
 
 class AgentState(TypedDict):

@@ -1,6 +1,6 @@
 """Node to load tags from the tags file."""
 import logging
-from src.agents.article_processor import load_tags_from_file
+from src.agents.nodes.article_processor import load_tags_from_file
 from src.agents.types import AgentState
 from src.config.settings import settings
 

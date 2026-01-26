@@ -10,22 +10,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/generate")
+@router.get("/articles")
 async def generate_summary() -> Dict:
     """
-    Generate a summary and list of top 10 articles from MCP servers.
+    Generate a summary about best articles from MCP servers.
     
     This endpoint:
     1. Loads tags from assets/tags.txt
     2. Fetches articles from configured MCP servers (last 3 days)
-    3. Filters articles by tags
-    4. Ranks and selects top 10 articles
-    5. Generates a summary using Azure OpenAI
+    3. Generates a summary using Azure OpenAI
     
     Returns:
         Dictionary containing:
         - summary: Global summary of main themes
-        - top_articles: List of top 10 articles with relevance reasons
         
     Raises:
         HTTPException: If the agent workflow fails

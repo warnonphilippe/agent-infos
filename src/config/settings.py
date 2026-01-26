@@ -23,9 +23,9 @@ class Settings(BaseSettings):
     exa_api_key: Optional[str] = Field(default=None, description="Exa API key for MCP search")
     
     # MCP servers configuration - can be set via environment variable as comma-separated list
-    mcp_servers: Optional[str] = Field(
-        default=None,
-        description="Comma-separated list of MCP server URLs"
+    mcp_servers: List[str] = Field(
+        default_factory=list,
+        description="List of MCP server URLs"
     )
     
     # Path to tags file
