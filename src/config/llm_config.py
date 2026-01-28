@@ -1,8 +1,12 @@
 """LLM configuration and initialization."""
+import logging
+from pathlib import Path
+
 from langchain_openai import AzureChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from src.config.settings import settings
 
+logger = logging.getLogger(__name__)
 
 def get_llm() -> AzureChatOpenAI:
     """
@@ -21,6 +25,20 @@ def get_llm() -> AzureChatOpenAI:
     )
 
 
+def load_prompt(filename: str) -> str:
+    """Load prompt content from assets directory."""
+    try:
+        # Prompt files should be in src/assets
+        # __file__ is src/config/llm_config.py
+        # parent = src/config, parent.parent = src
+        path = Path(__file__).parent.parent / "assets" / filename
+        return path.read_text(encoding="utf-8")
+    except Exception as e:
+        logger.error(f"Failed to load prompt file {filename}: {e}")
+        # Fallback empty string or raise? 
+        # For now raise so we know config is broken
+        raise
+
 def get_summary_prompt() -> ChatPromptTemplate:
     """
     Get the prompt template for generating article summaries.
@@ -28,36 +46,10 @@ def get_summary_prompt() -> ChatPromptTemplate:
     Returns:
         ChatPromptTemplate: Prompt template for summarization
     """
+    system_prompt = load_prompt("summary_system_prompt.md")
+    user_prompt = load_prompt("summary_user_prompt.md")
+    
     return ChatPromptTemplate.from_messages([
-        ("system", """Tu es un assistant expert qui analyse des articles techniques et scientifiques.
-        
-Ton rôle est de:
-1. Générer un résumé global des thèmes principaux abordés dans les articles
-2. Identifier les 10 articles les plus intéressants et pertinents
-3. Expliquer pourquoi chaque article est intéressant en relation avec les sujets recherchés
-
-Sois concis mais informatif dans tes réponses."""),
-        ("human", """Voici une liste d'articles récents filtrés selon les tags suivants: {tags}
-
-Articles:
-{articles}
-
-Génère:
-1. Un résumé global des thèmes principaux (2-3 paragraphes)
-2. Une liste des 10 articles les plus intéressants avec pour chacun:
-   - Le titre
-   - L'URL
-   - Une explication courte (1-2 phrases) de pourquoi cet article est intéressant
-
-Format ta réponse en JSON avec cette structure:
-{{
-  "summary": "résumé global...",
-  "top_articles": [
-    {{
-      "title": "titre",
-      "url": "url",
-      "relevance_reason": "pourquoi intéressant"
-    }}
-  ]
-}}""")
+        ("system", system_prompt),
+        ("human", user_prompt)
     ])

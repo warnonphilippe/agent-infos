@@ -26,16 +26,7 @@ async def generate_summary_node(state: AgentState) -> AgentState:
     """Generate a summary with the LLM using structured output."""
     logger.info("Generating summary with LLM (Structured)")
     
-    # In the simplified graph, we get 'articles' directly from fetch_articles_node
-    # We should support 'articles', 'filtered_articles', or 'top_articles'.
-    articles = state.get("articles", []) # Direct fetch result
-    
-    if state.get("filtered_articles"):
-        articles = state.get("filtered_articles")
-    
-    if state.get("top_articles"):
-        articles = state.get("top_articles")
-        
+    articles = state.get("articles", [])
     tags = state.get("tags", [])
 
     if not articles:
@@ -50,7 +41,7 @@ async def generate_summary_node(state: AgentState) -> AgentState:
         display_articles = articles[:15]
         
         llm = get_llm()
-        structured_llm = llm.with_structured_output(SummaryResult)
+        structured_llm = llm.with_structured_output(SummaryResult, method="function_calling")
         
         prompt = get_summary_prompt()
 
@@ -90,7 +81,8 @@ async def generate_summary_node(state: AgentState) -> AgentState:
                     "published_at": pub_str,
                     "source": original.get("source"),
                     "tags": original.get("tags", []),
-                    "relevance_reason": reviewed_article.relevance_reason
+                    "relevance_reason": reviewed_article.relevance_reason,
+                    "content": original.get("content"),
                 })
         
         result_dict = {

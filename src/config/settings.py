@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     
     # Path to tags file
     tags_file: Path = Field(
-        default=Path(__file__).parent.parent.parent / "assets" / "tags.txt",
+        default=Path(__file__).parent.parent / "assets" / "tags.txt",
         description="Path to the tags file"
     )
     
