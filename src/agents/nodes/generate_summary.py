@@ -37,11 +37,13 @@ async def generate_summary_node(state: AgentState) -> AgentState:
         return {**state, "summary": empty_result["summary"], "result": empty_result}
 
     try:
-        # Take up to 15 articles to avoid context overflow, although we asked for 10
-        display_articles = articles[:15]
+        display_articles = articles[:10]
         
         llm = get_llm()
         structured_llm = llm.with_structured_output(SummaryResult, method="function_calling")
+
+        # TODO : Calculate relevance score for each article
+        # TODO : Order articles by relevance
         
         prompt = get_summary_prompt()
 
