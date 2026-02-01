@@ -2,6 +2,7 @@ Recherche d'articles via l'API de Exa MCP
 search_exa_mcp permet d'accéder aux articles via l'API de Exa MCP
 
 TODO : Intégrer un appel à un server de mail
+https://mailtrap.io/blog/mcp-server-launch/
 
 TODO : Faire fonctionner appel à Brave Search, par transmission d'un prompt à partir de l'API de Brave Search
 
