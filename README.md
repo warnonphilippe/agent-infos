@@ -115,6 +115,13 @@ La réponse sera au format JSON:
 }
 ```
 
+3. **Recherche de news via agent:**
+```bash
+curl -X POST "http://localhost:8000/api/news" \
+     -H "Content-Type: application/json" \
+     -d '{"query": "Latest news on AI"}'
+```
+
 ## Configuration des serveurs MCP
 
 Les serveurs MCP peuvent être configurés de deux façons:

@@ -5,8 +5,8 @@ import logging
 
 from typing import Any, Dict, List
 
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_openai import AzureChatOpenAI
 
 from src.config.settings import settings
 
@@ -66,14 +66,19 @@ async def run_news_agent(user_query: str) -> str:
                         "function": {
                             "name": tool.name,
                             "description": tool.description,
-                            "parameters": tool.inputSchema,
+                            "parameters": tool.input_schema,
                         },
                     }
                 )
 
             # 4. Le "Cerveau" (LLM)
-            llm = ChatOpenAI(model="gpt-4o")
-            llm_with_tools = llm.bind(functions=llm_tools)
+            llm = AzureChatOpenAI(
+                azure_deployment=settings.azure_openai_chat_deployment,
+                api_version=settings.azure_openai_api_version,
+                azure_endpoint=settings.azure_openai_endpoint,
+                api_key=settings.azure_openai_api_key,
+            )
+            llm_with_tools = llm.bind(tools=llm_tools)
 
             # --- LA REQUÊTE UTILISATEUR ---
             print(f"\n👤 Question : {user_query}")
@@ -85,10 +90,11 @@ async def run_news_agent(user_query: str) -> str:
             messages.append(ai_msg)
 
             # 5. Boucle d'exécution
-            if ai_msg.additional_kwargs.get("function_call"):
-                fc = ai_msg.additional_kwargs["function_call"]
-                tool_name = fc["name"]
-                tool_args = json.loads(fc["arguments"])
+            if ai_msg.tool_calls:
+                # On prend le premier outil appelé
+                tool_call = ai_msg.tool_calls[0]
+                tool_name = tool_call["name"]
+                tool_args = tool_call["args"]
 
                 print(f"🤖 Le LLM veut utiliser : {tool_name}")
                 print(f"   Paramètres : {tool_args}")
@@ -107,7 +113,16 @@ async def run_news_agent(user_query: str) -> str:
 
                 # 6. Synthèse finale
                 # On redonne les news brutes au LLM pour qu'il fasse un résumé propre
-                feed_back_msg = f"Voici les résultats bruts de la recherche : {search_results}. Fais-moi une synthèse claire."
+                # 6. Synthèse finale
+                # On redonne les news brutes au LLM pour qu'il fasse un résumé propre
+
+                messages.append(
+                    ToolMessage(
+                        tool_call_id=tool_call["id"], content=str(search_results)
+                    )
+                )
+
+                feed_back_msg = "Fais-moi une synthèse claire des nouvelles."
                 messages.append(HumanMessage(content=feed_back_msg))
 
                 final_response = llm.invoke(messages)
