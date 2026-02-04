@@ -26,7 +26,7 @@ openai_api_key = settings.azure_openai_api_key
 brave_api_key = settings.brave_api_key
 
 
-async def run_news_agent():
+async def run_news_agent(user_query: str) -> str:
     print("🗞️ Démarrage de l'Agent Journaliste MCP...")
 
     brave_key = settings.brave_api_key
@@ -76,7 +76,6 @@ async def run_news_agent():
             llm_with_tools = llm.bind(functions=llm_tools)
 
             # --- LA REQUÊTE UTILISATEUR ---
-            user_query = "Quelles sont les dernières actualités importantes sur l'IA aujourd'hui ?"
             print(f"\n👤 Question : {user_query}")
 
             messages = [HumanMessage(content=user_query)]
@@ -117,11 +116,12 @@ async def run_news_agent():
                 print(final_response.content)
                 print("---------------------")
 
+                return final_response.content
+
             else:
-                print(
-                    "Le LLM a répondu sans utiliser d'outils (ce qui est bizarre pour des news récentes)."
-                )
+                print("Le LLM a répondu sans utiliser d'outils.")
+                return ai_msg.content
 
 
-if __name__ == "__main__":
-    asyncio.run(run_news_agent())
+# if __name__ == "__main__":
+#    asyncio.run(run_news_agent())
