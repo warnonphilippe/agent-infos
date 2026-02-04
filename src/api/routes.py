@@ -2,7 +2,7 @@
 
 import logging
 from fastapi import APIRouter, HTTPException
-from typing import Dict
+from typing import Dict, Any
 
 from src.agents.article_search_agent import ArticleSearchAgent
 from src.agents.brave_search_agent import BraveSearchAgent
@@ -68,7 +68,7 @@ class NewsRequest(BaseModel):
 
 
 @router.post("/news")
-async def run_news(request: NewsRequest) -> Dict[str, str]:
+async def run_news(request: NewsRequest) -> Dict[str, Any]:
     """
     Run the news agent with a user query.
 
@@ -76,13 +76,13 @@ async def run_news(request: NewsRequest) -> Dict[str, str]:
         request: NewsRequest containing the user query
 
     Returns:
-        Dictionary containing the agent's response
+        Dictionary containing the agent's response (summary and details)
     """
     try:
         logger.info(f"Received news request: {request.query}")
         agent = BraveSearchAgent()
         result = await agent.run(request.query)
-        return {"response": result}
+        return result
     except Exception as e:
         logger.error(f"Error running news agent: {e}", exc_info=True)
         raise HTTPException(

@@ -19,4 +19,6 @@ class NewsState(TypedDict):
 
     query: str
     search_results: Optional[str]
+    formatted_results: Optional[str]
+    structured_results: Optional[List[Dict]]
     final_summary: Optional[str]
