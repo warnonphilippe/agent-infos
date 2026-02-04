@@ -3,6 +3,8 @@ from src.agents.nodes.build_queries import build_queries_node
 from src.agents.nodes.fetch_articles import fetch_articles_node
 from src.agents.nodes.generate_summary import generate_summary_node
 from src.agents.nodes.format_response import format_response_node
+from src.agents.nodes.brave_search_node import brave_search_node
+from src.agents.nodes.summarize_results_node import summarize_results_node
 
 __all__ = [
     "load_tags_node",
@@ -10,4 +12,6 @@ __all__ = [
     "fetch_articles_node",
     "generate_summary_node",
     "format_response_node",
+    "brave_search_node",
+    "summarize_results_node",
 ]

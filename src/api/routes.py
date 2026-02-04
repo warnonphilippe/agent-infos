@@ -5,7 +5,8 @@ from fastapi import APIRouter, HTTPException
 from typing import Dict
 
 from src.agents.article_search_agent import ArticleSearchAgent
-from src.agents.brave_search_agent import run_news_agent
+from src.agents.brave_search_agent import BraveSearchAgent
+
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,8 @@ async def run_news(request: NewsRequest) -> Dict[str, str]:
     """
     try:
         logger.info(f"Received news request: {request.query}")
-        result = await run_news_agent(request.query)
+        agent = BraveSearchAgent()
+        result = await agent.run(request.query)
         return {"response": result}
     except Exception as e:
         logger.error(f"Error running news agent: {e}", exc_info=True)
