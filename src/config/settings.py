@@ -21,7 +21,8 @@ class Settings(BaseSettings):
     )
     langchain_api_key: str = Field(..., description="LangChain API key")
     exa_api_key: Optional[str] = Field(default=None, description="Exa API key for MCP search")
-    
+    brave_api_key: Optional[str] = Field(default=None, description="Brave API key for MCP search")
+
     # MCP servers configuration - can be set via environment variable as comma-separated list
     mcp_servers: List[str] = Field(
         default_factory=list,
