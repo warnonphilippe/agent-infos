@@ -1,4 +1,5 @@
 """Agent and orchestration for the article search workflow."""
+
 import logging
 from typing import Dict, Optional
 from langgraph.graph import StateGraph, END
@@ -10,6 +11,7 @@ from src.agents.nodes import (
     # filter_articles_node, # Removed per user request (Exa doesn't return tags)
     generate_summary_node,
     format_response_node,
+    send_summary_email_node,
 )
 from src.agents.types import AgentState
 
@@ -31,13 +33,15 @@ class ArticlesOrchestrator:
         workflow.add_node("fetch_articles", fetch_articles_node)
         workflow.add_node("generate_summary", generate_summary_node)
         workflow.add_node("format_response", format_response_node)
+        workflow.add_node("send_email", send_summary_email_node)
 
         workflow.set_entry_point("load_tags")
         workflow.add_edge("load_tags", "build_queries")
-        workflow.add_edge("build_queries", "fetch_articles")        
+        workflow.add_edge("build_queries", "fetch_articles")
         workflow.add_edge("fetch_articles", "generate_summary")
         workflow.add_edge("generate_summary", "format_response")
-        workflow.add_edge("format_response", END)
+        workflow.add_edge("format_response", "send_email")
+        workflow.add_edge("send_email", END)
 
         return workflow.compile()
 

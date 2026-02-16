@@ -6,6 +6,7 @@ from src.agents.nodes.format_response import format_response_node
 from src.agents.nodes.brave_search_node import brave_search_node
 from src.agents.nodes.summarize_results_node import summarize_results_node
 from src.agents.nodes.format_results_node import format_results_node
+from src.agents.nodes.send_summary_email_node import send_summary_email_node
 
 __all__ = [
     "load_tags_node",
@@ -16,4 +17,5 @@ __all__ = [
     "brave_search_node",
     "summarize_results_node",
     "format_results_node",
+    "send_summary_email_node",
 ]
