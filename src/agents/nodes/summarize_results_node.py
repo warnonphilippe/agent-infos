@@ -33,7 +33,7 @@ async def summarize_results_node(state: NewsState) -> Dict[str, Any]:
     prompt = (
         f"Voici les résultats de recherche pour la requête : '{user_query}'\n\n"
         f"Résultats :\n{search_results}\n\n"
-        "Fais-moi une synthèse claire et journalistique. "
+        "Fais-moi une synthèse claire et journalistique. \n\n"
         "IMPORTANT : Pour chaque information importante, cite obligatoirement la source avec son URL (cliquable si possible en Markdown)."
     )
     msg = HumanMessage(content=prompt)

@@ -54,20 +54,29 @@ async def extract_search_results_node(state: NewsState) -> Dict[str, Any]:
     Preserves JSON structure to ensure URLs and metadata are not lost.
     """
     messages = state.get("messages", [])
-
     all_results = []
+
+    print(f"🔍 Extraction des résultats à partir de {len(messages)} messages...")
 
     # Collect all tool responses
     for msg in messages:
-        if hasattr(msg, "type") and msg.type == "tool":
-            content = msg.content
+        # Check for ToolMessage (usually msg.type == 'tool')
+        msg_type = getattr(msg, "type", "")
+
+        if msg_type == "tool":
+            content = getattr(msg, "content", "")
+            print(f"🛠️  Trouvé un résultat d'outil ({len(str(content))} chars)")
             try:
                 # If it's JSON, parse it to extract structured data
-                data = json.loads(content)
+                if isinstance(content, str):
+                    data = json.loads(content)
+                else:
+                    data = content
+
                 if isinstance(data, list):
                     all_results.extend(data)
                 elif isinstance(data, dict):
-                    # Brave Search often returns {'web': {'results': [...]}}
+                    # Handle various Brave Search JSON structures
                     if (
                         "web" in data
                         and isinstance(data["web"], dict)
@@ -80,23 +89,30 @@ async def extract_search_results_node(state: NewsState) -> Dict[str, Any]:
                         all_results.append(data)
                 else:
                     all_results.append({"content": content, "type": "raw_json"})
-            except json.JSONDecodeError:
-                # If not JSON, check if it contains URLs via simple string search or just keep it
+            except (json.JSONDecodeError, TypeError):
                 all_results.append({"content": content, "type": "text"})
 
-    # If we found structured results, serialize them as a single JSON for the next node
-    if all_results:
-        search_results = json.dumps({"results": all_results})
-    else:
-        # Fallback to the last AI message if no tools were used
-        last_msg = messages[-1] if messages else None
-        if (
-            last_msg
-            and last_msg.type == "ai"
-            and not getattr(last_msg, "tool_calls", None)
-        ):
-            search_results = last_msg.content
-        else:
-            search_results = ""
+    # If no tool results, check if the LLM gave a direct answer
+    if not all_results and messages:
+        last_msg = messages[-1]
+        msg_type = getattr(last_msg, "type", "")
+        if msg_type == "ai" and not getattr(last_msg, "tool_calls", None):
+            print("🤖 Pas d'outil utilisé, récupération de la réponse directe du LLM.")
+            all_results.append(
+                {
+                    "title": "Réponse directe de l'agent",
+                    "description": getattr(last_msg, "content", ""),
+                    "url": "N/A",
+                }
+            )
 
-    return {"search_results": search_results}
+    if all_results:
+        print(f"✅ Total de {len(all_results)} items extraits.")
+        # Ensure we always return a valid JSON string for search_results
+        return {
+            "search_results": json.dumps({"results": all_results}),
+            "structured_results": all_results,
+        }
+
+    print("⚠️ Aucun résultat trouvé pendant l'extraction.")
+    return {"search_results": "", "structured_results": []}
