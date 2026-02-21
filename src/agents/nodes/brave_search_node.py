@@ -1,110 +1,102 @@
-"""Node for performing Brave Search via MCP."""
+"""Node for starting the Brave Search agent."""
 
-import os
+import json
 import logging
-from typing import Dict, Any
-
-from langchain_core.messages import HumanMessage
+from typing import Dict, Any, List
 from langchain_openai import AzureChatOpenAI
+from langchain_core.messages import HumanMessage
 
 from src.config.settings import settings
 from src.agents.types import NewsState
-
-# MCP Imports
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
-from mcp.types import CallToolResult
 
 logger = logging.getLogger(__name__)
 
 
 async def brave_search_node(state: NewsState) -> Dict[str, Any]:
     """
-    Node 1: Search
-    Connects to MCP, discovers tools, decides which tool to use, executes it.
-    Returns the search results as text.
+    Agent Node: Logic for deciding whether to use search tools.
     """
     user_query = state["query"]
-    print("🗞️ Démarrage de l'Agent Journaliste MCP pour la recherche...")
+    messages = state.get("messages", [])
 
-    brave_key = settings.brave_api_key
-    if not brave_key:
-        logger.warning("No Brave API key configured (BRAVE_API_KEY)")
+    # Initialize messages if empty
+    if not messages:
+        messages = [HumanMessage(content=user_query)]
+        print(f"🗞️ Analyse de la requête : {user_query}")
+    else:
+        print("🤖 Réflexion de l'agent suite aux résultats...")
 
-    # MCP Server Parameters
-    server_params = StdioServerParameters(
-        command="npx",
-        args=["-y", "@modelcontextprotocol/server-brave-search"],
-        env={
-            **os.environ.copy(),
-            "BRAVE_API_KEY": brave_key or "",
-        },
+    llm = AzureChatOpenAI(
+        azure_deployment=settings.azure_openai_chat_deployment,
+        api_version=settings.azure_openai_api_version,
+        azure_endpoint=settings.azure_openai_endpoint,
+        api_key=settings.azure_openai_api_key,
     )
 
-    search_results = ""
+    # Important: The tools must be bound externally or here
+    # Since we want ToolNode to work, we must bind the same tools
+    from src.agents.mcp_tools import MCPBraveSearchTools
 
-    # MCP Context Lifecycle
-    async with stdio_client(server_params) as (read, write):
-        async with ClientSession(read, write) as session:
-            # 1. Initialize
-            await session.initialize()
+    factory = MCPBraveSearchTools()
+    tools = await factory.get_tools_as_langchain()
 
-            # 2. List Tools
-            tools_list = await session.list_tools()
-            print(
-                f"\n✅ Serveur connecté. Outils disponibles : {[t.name for t in tools_list.tools]}"
-            )
+    llm_with_tools = llm.bind_tools(tools)
 
-            # 3. LLM Setup
-            llm_tools = []
-            for tool in tools_list.tools:
-                llm_tools.append(
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": tool.name,
-                            "description": tool.description,
-                            "parameters": tool.input_schema,
-                        },
-                    }
-                )
+    ai_msg = await llm_with_tools.ainvoke(messages)
 
-            llm = AzureChatOpenAI(
-                azure_deployment=settings.azure_openai_chat_deployment,
-                api_version=settings.azure_openai_api_version,
-                azure_endpoint=settings.azure_openai_endpoint,
-                api_key=settings.azure_openai_api_key,
-            )
-            llm_with_tools = llm.bind(tools=llm_tools)
+    # We return the AI message to be added to the 'messages' list by the reducer
+    return {"messages": [ai_msg]}
 
-            print(f"\n👤 Question : {user_query}")
-            messages = [HumanMessage(content=user_query)]
 
-            # 4. Invoke LLM
-            ai_msg = llm_with_tools.invoke(messages)
+async def extract_search_results_node(state: NewsState) -> Dict[str, Any]:
+    """
+    Post-tool node to extract the search results from tool messages.
+    Preserves JSON structure to ensure URLs and metadata are not lost.
+    """
+    messages = state.get("messages", [])
 
-            # 5. Handle Response
-            if ai_msg.tool_calls:
-                tool_call = ai_msg.tool_calls[0]
-                tool_name = tool_call["name"]
-                tool_args = tool_call["args"]
+    all_results = []
 
-                print(f"🤖 Le LLM veut utiliser : {tool_name}")
-                print(f"   Paramètres : {tool_args}")
-                print("⏳ Interrogation du serveur MCP (Recherche Brave)...")
-
-                result: CallToolResult = await session.call_tool(
-                    name=tool_name, arguments=tool_args
-                )
-
-                if result.content:
-                    search_results = result.content[0].text
-                    print(f"✅ Résultats reçus ({len(search_results)} caractères).")
+    # Collect all tool responses
+    for msg in messages:
+        if hasattr(msg, "type") and msg.type == "tool":
+            content = msg.content
+            try:
+                # If it's JSON, parse it to extract structured data
+                data = json.loads(content)
+                if isinstance(data, list):
+                    all_results.extend(data)
+                elif isinstance(data, dict):
+                    # Brave Search often returns {'web': {'results': [...]}}
+                    if (
+                        "web" in data
+                        and isinstance(data["web"], dict)
+                        and "results" in data["web"]
+                    ):
+                        all_results.extend(data["web"]["results"])
+                    elif "results" in data and isinstance(data["results"], list):
+                        all_results.extend(data["results"])
+                    else:
+                        all_results.append(data)
                 else:
-                    search_results = "Aucun contenu retourné par l'outil."
-                    print("⚠️ Aucun contenu retourné.")
-            else:
-                print("Le LLM a répondu sans utiliser d'outils.")
-                search_results = ai_msg.content
+                    all_results.append({"content": content, "type": "raw_json"})
+            except json.JSONDecodeError:
+                # If not JSON, check if it contains URLs via simple string search or just keep it
+                all_results.append({"content": content, "type": "text"})
+
+    # If we found structured results, serialize them as a single JSON for the next node
+    if all_results:
+        search_results = json.dumps({"results": all_results})
+    else:
+        # Fallback to the last AI message if no tools were used
+        last_msg = messages[-1] if messages else None
+        if (
+            last_msg
+            and last_msg.type == "ai"
+            and not getattr(last_msg, "tool_calls", None)
+        ):
+            search_results = last_msg.content
+        else:
+            search_results = ""
 
     return {"search_results": search_results}

@@ -30,10 +30,15 @@ async def summarize_results_node(state: NewsState) -> Dict[str, Any]:
         api_key=settings.azure_openai_api_key,
     )
 
-    prompt = f"Voici les résultats bruts de la recherche pour '{user_query}':\n\n{search_results}\n\nFais-moi une synthèse claire."
+    prompt = (
+        f"Voici les résultats de recherche pour la requête : '{user_query}'\n\n"
+        f"Résultats :\n{search_results}\n\n"
+        "Fais-moi une synthèse claire et journalistique. "
+        "IMPORTANT : Pour chaque information importante, cite obligatoirement la source avec son URL (cliquable si possible en Markdown)."
+    )
     msg = HumanMessage(content=prompt)
 
-    response = llm.invoke([msg])
+    response = await llm.ainvoke([msg])
 
     print("\n📰 --- FLASH INFO ---")
     print(response.content)

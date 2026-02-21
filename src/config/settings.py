@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     mailtrap_api_token: Optional[str] = Field(
         default=None, description="Mailtrap API token"
     )
+    mailtrap_id: Optional[int] = Field(default=None, description="Mailtrap account ID")
     mailtrap_from_email: str = Field(
         default="test@example.com", description="Default sender for email summary"
     )

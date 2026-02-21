@@ -4,8 +4,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
 
-from src.agents.article_search_agent import ArticleSearchAgent
-from src.agents.brave_search_agent import BraveSearchAgent
+from src.agents.orchestrator import ArticleSearchAgent, BraveSearchAgent
 
 from pydantic import BaseModel
 

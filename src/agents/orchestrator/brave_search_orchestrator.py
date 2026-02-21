@@ -6,6 +6,7 @@ from langgraph.graph import StateGraph, END
 
 from src.agents.nodes import (
     brave_search_node,
+    extract_search_results_node,
     summarize_results_node,
     format_results_node,
 )
@@ -18,20 +19,40 @@ class BraveSearchOrchestrator:
     """Builds and runs the LangGraph workflow for news processing."""
 
     def __init__(self) -> None:
-        self.graph = self._build_graph()
+        self.compiled_graph = None
 
     @staticmethod
-    def _build_graph():
+    async def _build_graph():
+        from langgraph.prebuilt import ToolNode, tools_condition
+        from src.agents.mcp_tools import MCPBraveSearchTools
+
         workflow = StateGraph(NewsState)
 
+        # Initialize tools
+        factory = MCPBraveSearchTools()
+        tools = await factory.get_tools_as_langchain()
+        tool_node = ToolNode(tools)
+
         # Add nodes
-        workflow.add_node("search", brave_search_node)
+        workflow.add_node("agent", brave_search_node)
+        workflow.add_node("tools", tool_node)
+        workflow.add_node("extract", extract_search_results_node)
         workflow.add_node("format", format_results_node)
         workflow.add_node("summarize", summarize_results_node)
 
-        # Define edges
-        workflow.set_entry_point("search")
-        workflow.add_edge("search", "format")
+        # Define edges/routing
+        workflow.set_entry_point("agent")
+
+        # Conditional edge: agent -> tools OR agent -> extract
+        workflow.add_conditional_edges(
+            "agent", tools_condition, {"tools": "tools", "__end__": "extract"}
+        )
+
+        # Loop back from tools to agent
+        workflow.add_edge("tools", "agent")
+
+        # Continue flow after extraction
+        workflow.add_edge("extract", "format")
         workflow.add_edge("format", "summarize")
         workflow.add_edge("summarize", END)
 
@@ -41,13 +62,18 @@ class BraveSearchOrchestrator:
         """Execute the workflow and return the result."""
         initial_state: NewsState = {
             "query": user_query,
+            "messages": [],  # Initialize empty message list
             "search_results": None,
             "formatted_results": None,
             "structured_results": None,
             "final_summary": None,
         }
 
-        final_state = await self.graph.ainvoke(initial_state)
+        # Since _build_graph is now async, we need to handle it
+        if not hasattr(self, "compiled_graph") or self.compiled_graph is None:
+            self.compiled_graph = await self._build_graph()
+
+        final_state = await self.compiled_graph.ainvoke(initial_state)
         return {
             "summary": final_state.get(
                 "final_summary", "Erreur: Pas de résumé généré."
