@@ -25,7 +25,33 @@ async def send_summary_email_node(state: AgentState) -> Dict[str, Any]:
     summary = state.get("summary", "")
     if not summary:
         logger.warning("No summary available to send.")
-        return {"result": {"email_status": "skipped_no_summary"}}
+        return {
+            "result": {**state.get("result", {}), "email_status": "skipped_no_summary"}
+        }
+
+    # Extract top articles from result to append to email
+    result_data = state.get("result", {})
+    top_articles = result_data.get("top_articles", [])
+
+    articles_html = ""
+    articles_text = ""
+    if top_articles:
+        articles_html += "<h2>Top Articles</h2><ul>"
+        articles_text += "\n\nTop Articles:\n"
+        for idx, article in enumerate(top_articles, 1):
+            title = article.get("title", "Sans titre")
+            url = article.get("url", "#")
+            reason = article.get("relevance_reason", "")
+
+            articles_html += f"<li><strong><a href='{url}'>{title}</a></strong><br><i>{reason}</i></li><br>"
+            articles_text += f"{idx}. {title} ({url})\n   {reason}\n\n"
+        articles_html += "</ul>"
+
+    # We update the original result dictionary rather than overwriting it
+    def return_with_status(status_updates: dict) -> dict:
+        result_cpy = dict(state.get("result", {}))
+        result_cpy.update(status_updates)
+        return {"result": result_cpy}
 
     api_token = settings.mailtrap_api_token
     sender = settings.mailtrap_from_email
@@ -33,7 +59,7 @@ async def send_summary_email_node(state: AgentState) -> Dict[str, Any]:
 
     if not api_token:
         logger.error("No Mailtrap API token configured (MAILTRAP_API_TOKEN)")
-        return {"result": {"email_status": "failed_no_token"}}
+        return return_with_status({"email_status": "failed_no_token"})
 
     # Prepare environment variables for the MCP server
     env_vars = os.environ.copy()
@@ -65,29 +91,37 @@ async def send_summary_email_node(state: AgentState) -> Dict[str, Any]:
                 print(f"🛠️ Utilisation de l'outil : {tool_to_use}")
 
                 # Prepare email content
+                text_content = summary + articles_text
+                # Convert the newlines in summary (if any) to <br> to prevent losing newlines in HTML but since the original was just <div>{summary}</div> maybe it's fine.
+                html_content = f"<h1>Résumé des Articles</h1><div style='white-space: pre-wrap;'>{summary}</div>{articles_html}"
+
                 email_args = {
                     "to": [recipient],
                     "subject": "Résumé quotidien des articles IA",
-                    "text": summary,  # Fallback text
-                    "html": f"<h1>Résumé des Articles</h1><div>{summary}</div>",  # Basic HTML wrapping
+                    "text": text_content,  # Fallback text
+                    "html": html_content,  # Basic HTML wrapping
                     "category": "Daily Summary",
                 }
 
                 print(f"📨 Envoi à {recipient}...")
 
-                result: CallToolResult = await session.call_tool(
+                result_tool: CallToolResult = await session.call_tool(
                     name=tool_to_use, arguments=email_args
                 )
 
-                if result.content:
-                    content_texts = [c.text for c in result.content if c.type == "text"]
+                if result_tool.content:
+                    content_texts = [
+                        c.text for c in result_tool.content if c.type == "text"
+                    ]
                     result_text = "\n".join(content_texts)
                     print(f"✅ Email envoyé : {result_text}")
-                    return {"result": {"email_status": "sent", "details": result_text}}
+                    return return_with_status(
+                        {"email_status": "sent", "details": result_text}
+                    )
                 else:
                     print("⚠️ Email envoyé mais aucun retour.")
-                    return {"result": {"email_status": "sent_no_details"}}
+                    return return_with_status({"email_status": "sent_no_details"})
 
     except Exception as e:
         logger.error(f"Error sending email: {e}")
-        return {"result": {"email_status": "failed", "error": str(e)}}
+        return return_with_status({"email_status": "failed", "error": str(e)})
