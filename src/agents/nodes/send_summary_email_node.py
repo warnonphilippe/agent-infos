@@ -28,8 +28,8 @@ async def send_summary_email_node(state: AgentState) -> Dict[str, Any]:
         return {"result": {"email_status": "skipped_no_summary"}}
 
     api_token = settings.mailtrap_api_token
-    sender = settings.default_from_email
-    recipient = settings.mailtrap_recipient_email
+    sender = settings.mailtrap_from_email
+    recipient = settings.mailtrap_to_email
 
     if not api_token:
         logger.error("No Mailtrap API token configured (MAILTRAP_API_TOKEN)")
